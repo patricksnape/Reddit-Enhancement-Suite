@@ -7,3 +7,4 @@ ie/RESIE.sdf
 ie/Debug/*
 ie/Release/*
 *~
+build/*
