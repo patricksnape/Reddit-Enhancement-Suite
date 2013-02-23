@@ -2,7 +2,7 @@ import json
 from shutil import copyfile
 import subprocess
 import sys
-from os import system
+from os import system, environ, getcwd
 
 manifest = {};
 with open('chrome/manifest.json') as manifest_file:
@@ -24,6 +24,10 @@ for icon in icons:
     dest = 'chrome/%s' % (icons[icon])
     copyfile(src, dest)
     
-cmd = '%s --pack-extension=%s --no-message-box' % ('/usr/bin/google-chrome', 'chrome')
-print cmd.encode(sys.getfilesystemencoding())
-system(cmd.encode(sys.getfilesystemencoding()))
+linux = '/usr/bin/google-chrome'
+windows = '%s\Google\Chrome\Application\chrome.exe' % (environ['LOCALAPPDATA'])
+chrome_folder = '"%s/chrome"' % (getcwd())
+chrome_folder = chrome_folder.encode(sys.getfilesystemencoding())
+pack_command = '%s --pack-extension=%s --no-message-box' % (windows, chrome_folder)
+load_command = '%s --load-extension=%s' % (windows, chrome_folder)
+system(pack_command.encode(sys.getfilesystemencoding()))
