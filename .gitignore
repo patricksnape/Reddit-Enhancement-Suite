@@ -8,3 +8,7 @@ ie/Debug/*
 ie/Release/*
 *~
 build/*
+
+*.crx
+*.pem
+*.xpi
