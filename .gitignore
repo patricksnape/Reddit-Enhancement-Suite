@@ -14,7 +14,9 @@ chrome/snuownd.js
 chrome/tinycon.min.js
 chrome/*.png
 
-opera/includes/reddit_enhancement_suite.user.js
+opera/includes/*
+opera/dev-profile/*
+opera/lib/*
 opera/*.png
 
 ie/RESIE.sdf
