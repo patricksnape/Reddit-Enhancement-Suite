@@ -18,5 +18,5 @@
   <access origin="http://gdata.youtube.com" />
   <access origin="http://backend.deviantart.com" />
   <access origin="http://api.tumblr.com" />
-  <icon src="logo.gif" />
+  <icon src="logo.png" />
 </widget>
