@@ -22,7 +22,7 @@ def build_opera_widgets_dat():
     ext_path = ET.SubElement(section_res_elem, "value")
     ext_path.set('id', 'path to widget data')
     ext_path.set('xml:space', 'perserve')
-    ext_path.text = '{Home}Documents/GitHub/Reddit-Enhancement-Suite/opera'
+    ext_path.text = path.join(getcwd(), 'opera')
     
     download_url = ET.SubElement(section_res_elem, "value")
     download_url.set('id', 'download_URL')
