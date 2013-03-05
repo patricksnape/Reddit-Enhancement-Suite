@@ -31,3 +31,4 @@ ie/Release/*
 .DS_Store
 
 build/*
+*.pyc
