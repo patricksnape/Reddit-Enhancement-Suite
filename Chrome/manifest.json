@@ -19,13 +19,15 @@
 				"https://*.reddit.com/*"
 			],
 			"js": [
-				"jquery-1.6.4.min.js",
-				"guiders-1.2.8.js",
-				"jquery.dragsort-0.4.3.min.js",
-				"jquery-fieldselection.min.js",
-				"tinycon.js",
-				"jquery.tokeninput.js",
-				"snuownd.js",
+				"libs/jquery-1.6.4.min.js",
+				"libs/guiders-1.2.8.js",
+				"libs/jquery.dragsort-0.4.3.min.js",
+				"libs/jquery-fieldselection.min.js",
+				"libs/tinycon.js",
+				"libs/jquery.tokeninput.js",
+				"libs/snuownd.js",
+				"modules/res_resutils.js",
+				"modules/res_bitcoin.js",
 				"reddit_enhancement_suite.user.js"
 			],
 			"run_at": "document_start"
