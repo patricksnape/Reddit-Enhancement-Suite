@@ -1,70 +1,41 @@
+/* jshint esnext: true */
+/* global require: false */
+
 // Import the APIs we need.
-var pageMod = require("page-mod");
-var Request = require('request').Request;
-var self = require("self");
-var firefox = typeof(require);
-var tabs = require("tabs");
-var ss = require("simple-storage");
-var priv = require("private-browsing");
-var windows = require("sdk/windows").browserWindows;
+let pageMod = require("page-mod");
+let Request = require("request").Request;
+let self = require("self");
+let tabs = require("tabs");
+let ss = require("simple-storage");
+let priv = require("private-browsing");
+let windows = require("sdk/windows").browserWindows;
 
 // require chrome allows us to use XPCOM objects...
-const {Cc,Ci,Cu} = require("chrome");
-var historyService = Cc["@mozilla.org/browser/history;1"].getService(Ci.mozIAsyncHistory);
+const {Cc,Ci,Cu,components} = require("chrome");
+let historyService = Cc["@mozilla.org/browser/history;1"].getService(Ci.mozIAsyncHistory);
+
 // Cookie manager for new API login
-var cookieManager = Cc["@mozilla.org/cookiemanager;1"].getService().QueryInterface(Ci.nsICookieManager2);
+let cookieManager = Cc["@mozilla.org/cookiemanager;1"].getService().QueryInterface(Ci.nsICookieManager2);
+components.utils.import("resource://gre/modules/NetUtil.jsm");
+
+// Preferences
+let prefs = Cc["@mozilla.org/preferences-service;1"].getService(Ci.nsIPrefBranch);
 
 // this function takes in a string (and optional charset, paseURI) and creates an nsURI object, which is required by historyService.addURI...
 function makeURI(aURL, aOriginCharset, aBaseURI) {
-  var ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
-  return ioService.newURI(aURL, aOriginCharset, aBaseURI);
+	let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
+	return ioService.newURI(aURL, aOriginCharset, aBaseURI);
 }
 
-var workers = [];
+let workers = [];
 function detachWorker(worker, workerArray) {
-  var index = workerArray.indexOf(worker);
-  if(index != -1) {
-    workerArray.splice(index, 1);
-  }
-}
-
-// This weird method of loading stylesheets is necessary due to the following bugs:
-//
-// Bug https://bugzilla.mozilla.org/show_bug.cgi?id=830121 nor, --, ---, zer0, RESO FIXED, page_mod contentStyleFile: background property incorrect priority
-// Bug https://bugzilla.mozilla.org/show_bug.cgi?id=837494 nor, P1, ---, zer0, RESO FIXED, re-implement `contentStyle*` using the new nsIDOMWindowUtils methods
-//
-// These bugs mean that we can't override things like a declared background color with our user-loaded stylesheets without !important, and that is bad.
-//
-// As of 2013-04-27 - these bugs are still present in stable Firefox, but fixed in Nightly.  However, the fix that lives in nightly isn't slated for stable
-// release until August 2013, so we need this temp fix for now.
-//
-// TODO: go back to contentStyleFile listing in pageMod instead of this crazy way of loading stylesheets once above bugs are fixed.
-var sss = Cc["@mozilla.org/content/style-sheet-service;1"]
-                    .getService(Ci.nsIStyleSheetService);
-var ios = Cc["@mozilla.org/network/io-service;1"]
-                    .getService(Ci.nsIIOService);
-
-var uri;
-var stylesheets = ['nightmode.css','res.css','commentBoxes.css'];
-for (var i in stylesheets) {
-	uri = ios.newURI(self.data.url(stylesheets[i]), null, null);
-	if(!sss.sheetRegistered(uri, sss.USER_SHEET)) {
-		sss.loadAndRegisterSheet(uri, sss.AUTHOR_SHEET);
+	let index = workerArray.indexOf(worker);
+	if (index !== -1) {
+		workerArray.splice(index, 1);
 	}
 }
 
-exports.onUnload = function (reason) {
-	if (reason === 'uninstall') {
-		for (var i in stylesheets) {
-			uri = ios.newURI(self.data.url(stylesheets[i]), null, null);
-			if(sss.sheetRegistered(uri, sss.USER_SHEET)) {
-				sss.unregisterSheet(uri, sss.AUTHOR_SHEET);
-			}
-		}
-	}
-};
-
-var localStorage = ss.storage;
+let localStorage = ss.storage;
 
 localStorage.getItem = function(key) {
 	return ss.storage[key];
@@ -76,7 +47,7 @@ localStorage.removeItem = function(key) {
 	delete ss.storage[key];
 };
 
-XHRCache = {
+let XHRCache = {
 	forceCache: false,
 	capacity: 250,
 	entries: {},
@@ -96,7 +67,7 @@ XHRCache = {
 			return;
 		} else {
 //			console.log("add");
-			this.entries[key] = {data: value, timestamp: new Date(), hits: 1};
+			this.entries[key] = {data: value, timestamp: Date.now(), hits: 1};
 			this.count++;
 		}
 		if (this.count > this.capacity) {
@@ -104,10 +75,10 @@ XHRCache = {
 		}
 	},
 	prune: function() {
-		var now = new Date();
-		var bottom = [];
-		for (var key in this.entries) {
-//			if (this.entries[key].hits == 1) {
+		let now = Date.now();
+		let bottom = [];
+		for (let key in this.entries) {
+//			if (this.entries[key].hits === 1) {
 //				delete this.entries[key];
 //				this.count--;
 //				continue;
@@ -120,8 +91,8 @@ XHRCache = {
 			});
 		}
 		bottom.sort(function(a,b){return a.weight-b.weight;});
-		var count = this.count - Math.floor(this.capacity / 2);
-		for (var i = 0; i < count; i++) {
+		let count = this.count - Math.floor(this.capacity / 2);
+		for (let i = 0; i < count; i++) {
 			delete this.entries[bottom[i].key];
 			this.count--;
 		}
@@ -134,8 +105,8 @@ XHRCache = {
 };
 tabs.on('activate', function(tab) {
 	// find this worker...
-	for (var i in workers) {
-		if ((typeof(workers[i].tab) != 'undefined') && (tab.title == workers[i].tab.title)) {
+	for (let i in workers) {
+		if ((typeof workers[i].tab !== 'undefined') && (tab.title === workers[i].tab.title)) {
 			workers[i].postMessage({ name: "getLocalStorage", message: localStorage });
 		}
 	}
@@ -143,196 +114,249 @@ tabs.on('activate', function(tab) {
 
 
 pageMod.PageMod({
-  include: ["*.reddit.com"],
-  contentScriptWhen: 'start',
-  contentScriptFile: [
-	self.data.url('jquery-1.9.1.min.js'),
-	self.data.url('guiders-1.2.8.js'),
-	self.data.url('jquery.dragsort-0.4.3.min.js'),
-	self.data.url('jquery-fieldselection.min.js'),
-	self.data.url('tinycon.js'),
-	self.data.url('jquery.tokeninput.js'),
-	self.data.url('snuownd.js'),
-	self.data.url('reddit_enhancement_suite.user.js')
-  ],
-/*  contentStyleFile: [
-	self.data.url('nightmode.css'),
-	self.data.url('commentBoxes.css'),
-	self.data.url('res.css')
-  ],
-*/  onAttach: function(worker) {
-	// when a tab is activated, repopulate localStorage so that changes propagate across tabs...
+	include: ["*.reddit.com"],
+	contentScriptWhen: 'start',
+	contentScriptFile: [
+		self.data.url('jquery-1.10.2.min.js'),
+		self.data.url('guiders-1.2.8.js'),
+		self.data.url('jquery.dragsort-0.6.js'),
+		self.data.url('jquery-fieldselection.min.js'),
+		self.data.url('tinycon.js'),
+		self.data.url('jquery.tokeninput.js'),
+		self.data.url('snuownd.js'),
+		self.data.url('utils.js'),
+		self.data.url('browsersupport.js'),
+		self.data.url('console.js'),
+		self.data.url('alert.js'),
+		self.data.url('storage.js'),
+		self.data.url('template.js'),
+		self.data.url('konami.js'),
+		self.data.url('mediacrush.js'),
+		self.data.url('hogan-2.0.0.js'),
+		self.data.url('reddit_enhancement_suite.user.js'),
+		self.data.url('modules/betteReddit.js'),
+		self.data.url('modules/userTagger.js'),
+		self.data.url('modules/keyboardNav.js'),
+		self.data.url('modules/commandLine.js'),
+		self.data.url('modules/about.js'),
+		self.data.url('modules/hover.js'),
+		self.data.url('modules/subredditTagger.js'),
+		self.data.url('modules/uppersAndDowners.js'),
+		self.data.url('modules/singleClick.js'),
+		self.data.url('modules/commentPreview.js'),
+		self.data.url('modules/commentTools.js'),
+		self.data.url('modules/usernameHider.js'),
+		self.data.url('modules/showImages.js'),
+		self.data.url('modules/showKarma.js'),
+		self.data.url('modules/hideChildComments.js'),
+		self.data.url('modules/showParent.js'),
+		self.data.url('modules/neverEndingReddit.js'),
+		self.data.url('modules/saveComments.js'),
+		self.data.url('modules/userHighlight.js'),
+		self.data.url('modules/styleTweaks.js'),
+		self.data.url('modules/accountSwitcher.js'),
+		self.data.url('modules/filteReddit.js'),
+		self.data.url('modules/newCommentCount.js'),
+		self.data.url('modules/spamButton.js'),
+		self.data.url('modules/commentNavigator.js'),
+		self.data.url('modules/subredditManager.js'),
+		self.data.url('modules/RESTips.js'),
+		self.data.url('modules/settingsNavigation.js'),
+		self.data.url('modules/dashboard.js'),
+		self.data.url('modules/notifications.js'),
+		self.data.url('modules/subredditInfo.js'),
+		self.data.url('modules/commentHidePersistor.js'),
+		self.data.url('modules/bitcointip.js'),
+		self.data.url('modules/troubleshooter.js'),
+		self.data.url('modules/tests.js'),
+		self.data.url('init.js')
+	],
+	contentStyleFile: [
+		self.data.url('nightmode.css'),
+		self.data.url('commentBoxes.css'),
+		self.data.url('res.css'),
+		self.data.url('guiders.css'),
+		self.data.url('tokenize.css'),
+		self.data.url('fitbamob.css'),
+		self.data.url("batch.css")
+	],
+	onAttach: function(worker) {
+		// when a tab is activated, repopulate localStorage so that changes propagate across tabs...
+		workers.push(worker);
+		worker.on('detach', function () {
+			detachWorker(this, workers);
+		});
+		worker.on('message', function(data) {
+			let request = data,
+				inBackground = prefs.getBoolPref('browser.tabs.loadInBackground') || true,
+				isPrivate, thisLinkURL;
 
-	workers.push(worker);
-    worker.on('detach', function () {
-      detachWorker(this, workers);
-    });
-	worker.on('message', function(data) {
-		var request = data;
-		switch(request.requestType) {
-			case 'deleteCookie':
-				cookieManager.remove('.reddit.com', request.cname, '/', false);
-				break;
-			case 'GM_xmlhttpRequest':
-				var responseObj = {
-					XHRID: request.XHRID,
-					name: request.requestType
-				};
-				if (request.aggressiveCache || XHRCache.forceCache) {
-					var cachedResult = XHRCache.check(request.url);
-					if (cachedResult) {
-						responseObj.response = cachedResult;
-						worker.postMessage(responseObj);
-						return;
-					}
-				}
-				if (request.method == 'POST') {
-					Request({
-						url: request.url,
-						onComplete: function(response) {
-							responseObj.response = {
-								responseText: response.text,
-								status: response.status
-							};
-							//Only cache on HTTP OK and non empty body
-							if ((request.aggressiveCache || XHRCache.forceCache) && (response.status == 200 && response.text)) {
-								XHRCache.add(request.url, responseObj.response);
-							}
+			switch (request.requestType) {
+				case 'readResource':
+					let fileData = self.data.load(request.filename);
+					worker.postMessage({ name: 'readResource', data: fileData, transaction: request.transaction });
+					break;
+				case 'deleteCookie':
+					cookieManager.remove('.reddit.com', request.cname, '/', false);
+					break;
+				case 'GM_xmlhttpRequest':
+					let responseObj = {
+						XHRID: request.XHRID,
+						name: request.requestType
+					};
+					if (request.aggressiveCache || XHRCache.forceCache) {
+						let cachedResult = XHRCache.check(request.url);
+						if (cachedResult) {
+							responseObj.response = cachedResult;
 							worker.postMessage(responseObj);
-						},
-						headers: request.headers,
-						content: request.data
-					}).post();
-				} else {
+							return;
+						}
+					}
+					if (request.method === 'POST') {
+						Request({
+							url: request.url,
+							onComplete: function(response) {
+								responseObj.response = {
+									responseText: response.text,
+									status: response.status
+								};
+								//Only cache on HTTP OK and non empty body
+								if ((request.aggressiveCache || XHRCache.forceCache) && (response.status === 200 && response.text)) {
+									XHRCache.add(request.url, responseObj.response);
+								}
+								worker.postMessage(responseObj);
+							},
+							headers: request.headers,
+							content: request.data
+						}).post();
+					} else {
+						Request({
+							url: request.url,
+							onComplete: function(response) {
+								responseObj.response = {
+									responseText: response.text,
+									status: response.status
+								};
+								if ((request.aggressiveCache || XHRCache.forceCache) && (response.status === 200 && response.text)) {
+									XHRCache.add(request.url, responseObj.response);
+								}
+								worker.postMessage(responseObj);
+							},
+							headers: request.headers,
+							content: request.data
+						}).get();
+					}
+
+					break;
+				case 'singleClick':
+					inBackground = ((request.button === 1) || (request.ctrl === 1));
+					isPrivate = priv.isPrivate(windows.activeWindow);
+
+					// handle requests from singleClick module
+					if (request.openOrder === 'commentsfirst') {
+						// only open a second tab if the link is different...
+						if (request.linkURL !== request.commentsURL) {
+							tabs.open({url: request.commentsURL, inBackground: inBackground, isPrivate: isPrivate });
+						}
+						tabs.open({url: request.linkURL, inBackground: inBackground, isPrivate: isPrivate });
+					} else {
+						tabs.open({url: request.linkURL, inBackground: inBackground, isPrivate: isPrivate });
+						// only open a second tab if the link is different...
+						if (request.linkURL !== request.commentsURL) {
+							tabs.open({url: request.commentsURL, inBackground: inBackground, isPrivate: isPrivate });
+						}
+					}
+					worker.postMessage({status: "success"});
+					break;
+				case 'keyboardNav':
+					isPrivate = priv.isPrivate(windows.activeWindow);
+
+					// handle requests from keyboardNav module
+					thisLinkURL = request.linkURL;
+					if (thisLinkURL.toLowerCase().substring(0, 4) !== 'http') {
+						thisLinkURL = (thisLinkURL.substring(0, 1) === '/') ? 'http://www.reddit.com' + thisLinkURL : location.href + thisLinkURL;
+					}
+					// Get the selected tab so we can get the index of it.  This allows us to open our new tab as the "next" tab.
+					tabs.open({url: thisLinkURL, inBackground: inBackground, isPrivate: isPrivate });
+					worker.postMessage({status: "success"});
+					break;
+				case 'openLinkInNewTab':
+					inBackground = (request.focus !== true);
+					isPrivate = priv.isPrivate(windows.activeWindow);
+
+					thisLinkURL = request.linkURL;
+					if (thisLinkURL.toLowerCase().substring(0, 4) !== 'http') {
+						thisLinkURL = (thisLinkURL.substring(0, 1) === '/') ? 'http://www.reddit.com' + thisLinkURL : location.href + thisLinkURL;
+					}
+					// Get the selected tab so we can get the index of it.  This allows us to open our new tab as the "next" tab.
+					tabs.open({url: thisLinkURL, inBackground: inBackground, isPrivate: isPrivate });
+					worker.postMessage({status: "success"});
+					break;
+				case 'loadTweet':
 					Request({
 						url: request.url,
 						onComplete: function(response) {
-							responseObj.response = {
-								responseText: response.text,
-								status: response.status
+							let resp = JSON.parse(response.text);
+							let responseObj = {
+								name: 'loadTweet',
+								response: resp
 							};
-							if ((request.aggressiveCache || XHRCache.forceCache) && (response.status == 200 && response.text)) {
-								XHRCache.add(request.url, responseObj.response);
-							}
 							worker.postMessage(responseObj);
 						},
 						headers: request.headers,
 						content: request.data
 					}).get();
-				}
-
-				break;
-			case 'singleClick':
-				var button = ((request.button == 1) || (request.ctrl == 1));
-				var isPrivate = priv.isPrivate(windows.activeWindow);
-
-				// handle requests from singleClick module
-				if (request.openOrder == 'commentsfirst') {
-					// only open a second tab if the link is different...
-					if (request.linkURL != request.commentsURL) {
-						tabs.open({url: request.commentsURL, inBackground: button, isPrivate: isPrivate });
+					break;
+				case 'getLocalStorage':
+					worker.postMessage({ name: 'getLocalStorage', message: localStorage });
+					break;
+				case 'saveLocalStorage':
+					for (let key in request.data) {
+						localStorage.setItem(key,request.data[key]);
 					}
-					tabs.open({url: request.linkURL, inBackground: button, isPrivate: isPrivate });
-				} else {
-					tabs.open({url: request.linkURL, inBackground: button, isPrivate: isPrivate });
-					// only open a second tab if the link is different...
-					if (request.linkURL != request.commentsURL) {
-						tabs.open({url: request.commentsURL, inBackground: button, isPrivate: isPrivate });
+					localStorage.setItem('importedFromForeground', true);
+					worker.postMessage({ name: 'saveLocalStorage', message: localStorage });
+					break;
+				case 'localStorage':
+					switch (request.operation) {
+						case 'getItem':
+							worker.postMessage({status: true, value: localStorage.getItem(request.itemName)});
+							break;
+						case 'removeItem':
+							localStorage.removeItem(request.itemName);
+							// worker.postMessage({status: true, value: null});
+							break;
+						case 'setItem':
+							localStorage.setItem(request.itemName, request.itemValue);
+							break;
 					}
-				}
-				worker.postMessage({status: "success"});
-				break;
-			case 'keyboardNav':
-				var button = (request.button == 1);
-				var isPrivate = priv.isPrivate(windows.activeWindow);
-
-				// handle requests from keyboardNav module
-				thisLinkURL = request.linkURL;
-				if (thisLinkURL.toLowerCase().substring(0,4) != 'http') {
-					(thisLinkURL.substring(0,1) == '/') ? thisLinkURL = 'http://www.reddit.com' + thisLinkURL : thisLinkURL = location.href + thisLinkURL;
-				}
-				// Get the selected tab so we can get the index of it.  This allows us to open our new tab as the "next" tab.
-				tabs.open({url: thisLinkURL, inBackground: button, isPrivate: isPrivate });
-				worker.postMessage({status: "success"});
-				break;
-			case 'openLinkInNewTab':
-				var focus = (request.focus === true);
-				var isPrivate = priv.isPrivate(windows.activeWindow);
-				thisLinkURL = request.linkURL;
-				if (thisLinkURL.toLowerCase().substring(0,4) != 'http') {
-					(thisLinkURL.substring(0,1) == '/') ? thisLinkURL = 'http://www.reddit.com' + thisLinkURL : thisLinkURL = location.href + thisLinkURL;
-				}
-				// Get the selected tab so we can get the index of it.  This allows us to open our new tab as the "next" tab.
-				tabs.open({url: thisLinkURL, inBackground: !focus, isPrivate: isPrivate });
-				worker.postMessage({status: "success"});
-				break;
-			case 'loadTweet':
-				Request({
-					url: request.url,
-					onComplete: function(response) {
-						var resp = JSON.parse(response.text);
-						var responseObj = {
-							name: 'loadTweet',
-							response: resp
-						};
-						worker.postMessage(responseObj);
-					},
-					headers: request.headers,
-					content: request.data
-				}).get();
-				break;
-			case 'getLocalStorage':
-				worker.postMessage({ name: 'getLocalStorage', message: localStorage });
-				break;
-			case 'saveLocalStorage':
-				for (var key in request.data) {
-					localStorage.setItem(key,request.data[key]);
-				}
-				localStorage.setItem('importedFromForeground',true);
-				worker.postMessage({ name: 'saveLocalStorage', message: localStorage });
-				break;
-			case 'localStorage':
-				switch (request.operation) {
-					case 'getItem':
-						worker.postMessage({status: true, value: localStorage.getItem(request.itemName)});
-						break;
-					case 'removeItem':
-						localStorage.removeItem(request.itemName);
-						// worker.postMessage({status: true, value: null});
-						break;
-					case 'setItem':
-						localStorage.setItem(request.itemName, request.itemValue);
-						break;
-				}
-				break;
-			case 'XHRCache':
-				switch (request.operation) {
-					case 'clear':
-						XHRCache.clear();
-						break;
-				}
-				break;
-			case 'addURLToHistory':
-				var isPrivate = priv.isPrivate(windows.activeWindow);
-				if (isPrivate) {
-					// do not add to history if in private browsing mode!
-					return false;
-				}
-				var uri = makeURI(request.url);
-				historyService.updatePlaces({
-					uri: uri,
-					visits: [{
-						transitionType: Ci.nsINavHistoryService.TRANSITION_LINK,
-						visitDate: Date.now() * 1000
-					}]
-				});
-				break;
-			default:
-				worker.postMessage({status: "unrecognized request type"});
-				break;
-		}
-
-
-	});
-  }
+					break;
+				case 'XHRCache':
+					switch (request.operation) {
+						case 'clear':
+							XHRCache.clear();
+							break;
+					}
+					break;
+				case 'addURLToHistory':
+					isPrivate = priv.isPrivate(windows.activeWindow);
+					if (isPrivate) {
+						// do not add to history if in private browsing mode!
+						return false;
+					}
+					let uri = makeURI(request.url);
+					historyService.updatePlaces({
+						uri: uri,
+						visits: [{
+							transitionType: Ci.nsINavHistoryService.TRANSITION_LINK,
+							visitDate: Date.now() * 1000
+						}]
+					});
+					break;
+				default:
+					worker.postMessage({status: "unrecognized request type"});
+					break;
+			}
+		});
+	}
 });
